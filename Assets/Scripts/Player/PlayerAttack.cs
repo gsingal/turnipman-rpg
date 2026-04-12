@@ -14,14 +14,10 @@ public class PlayerAttack : MonoBehaviour
     private Rigidbody2D _rb;
     private float _attackTimer;
 
-    private void Awake()
+    private void OnEnable()
     {
         _controller = GetComponent<PlayerController>();
         _rb = GetComponent<Rigidbody2D>();
-    }
-
-    private void OnEnable()
-    {
         _controller.Controls.Player.Attack.performed += OnAttack;
     }
 

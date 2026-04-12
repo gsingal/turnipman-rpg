@@ -14,14 +14,10 @@ public class PlayerDash : MonoBehaviour
     private float _cooldownTimer;
     private Vector2 _dashDirection;
 
-    private void Awake()
+    private void OnEnable()
     {
         _controller = GetComponent<PlayerController>();
         _rb = GetComponent<Rigidbody2D>();
-    }
-
-    private void OnEnable()
-    {
         _controller.Controls.Player.Dash.performed += OnDash;
     }
 
