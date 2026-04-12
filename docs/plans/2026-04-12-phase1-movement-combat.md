@@ -4,15 +4,21 @@
 
 **Goal:** Get the turnip character moving, attacking, and dashing in a test scene with correct feel — attacks have commitment, dash is near-instant with cooldown, both gamepad and keyboard work.
 
-**Architecture:** Player uses a state machine (Idle, Moving, Attacking, Dashing) to prevent action canceling. Movement uses Rigidbody2D. Unity's new Input System handles dual input support via an Input Action Asset. All player logic lives in `Assets/Scripts/Player/`. A simple test arena scene is used for iteration.
+**Architecture:** Player uses a state machine (Idle, Moving, Attacking, Dashing) to prevent action canceling. Movement uses Rigidbody2D. Unity's new Input System handles dual input support via an Input Action Asset. A single `PlayerControls` instance is owned by `PlayerController` and shared with other scripts. All player logic lives in `Assets/Scripts/Player/`. A simple test arena scene is used for iteration.
 
 **Tech Stack:** Unity 2022.3.30f1, C#, New Input System package, Rigidbody2D, Physics2D
+
+**Note:** Unity 2022.3 uses `Rigidbody2D.velocity` (NOT `.linearVelocity` which is Unity 6+).
 
 ---
 
 ### Task 1: Install the New Input System Package
 
 **Why:** The project currently uses the old Input Manager. The new Input System is required for equal gamepad + keyboard support through a single Input Action Asset.
+
+**Files:**
+- Modify: `Packages/manifest.json`
+- Modify: `ProjectSettings/ProjectSettings.asset`
 
 **Step 1: Install the package**
 
@@ -47,26 +53,28 @@ git commit -m "feat: install Unity Input System package"
 
 **Files:**
 - Create: `Assets/Input/PlayerControls.inputactions`
+- Create: `Assets/Input/PlayerControls.cs` (auto-generated)
 
-**Step 1: Create the Input Action Asset via script**
+**Step 1: Create the Input Action Asset**
 
-Since `.inputactions` files are JSON, we can create it directly. Create `Assets/Input/PlayerControls.inputactions` with the following action maps:
+Use Coplay MCP's `create_input_action_asset` tool to create the asset at `Assets/Input/PlayerControls.inputactions`. If MCP is unavailable, create it via Unity's UI (Assets → Create → Input Actions).
 
-- **Action Map: "Player"**
-  - **Move** (Value, Vector2)
-    - Keyboard: WASD composite (W=up, S=down, A=left, D=right)
-    - Keyboard: Arrow keys composite
-    - Gamepad: Left Stick
-  - **Attack** (Button)
-    - Keyboard: Space
-    - Gamepad: West Button (X on Xbox, Square on PS)
-  - **Dash** (Button)
-    - Keyboard: Left Shift
-    - Gamepad: South Button (A on Xbox, Cross on PS)
+Action Map: **"Player"** with these actions:
 
-**Step 2: Generate C# wrapper class**
+| Action | Type | Keyboard Bindings | Gamepad Bindings |
+|--------|------|-------------------|-----------------|
+| Move | Value (Vector2) | WASD composite, Arrow keys composite | Left Stick |
+| Attack | Button | Space | West Button (X/Square) |
+| Dash | Button | Left Shift | South Button (A/Cross) |
 
-Enable "Generate C# Class" on the asset. This creates `Assets/Input/PlayerControls.cs` — a type-safe wrapper we can use in code. The generated class file path should be `Assets/Input/PlayerControls.cs`.
+**Step 2: Enable "Generate C# Class"**
+
+In the Input Action Asset inspector, check "Generate C# Class" with:
+- File path: `Assets/Input/PlayerControls.cs`
+- Class name: `PlayerControls`
+- Namespace: (leave empty)
+
+Click Apply. This generates a type-safe wrapper class.
 
 **Step 3: Verify in Unity**
 
@@ -86,24 +94,21 @@ git commit -m "feat: add PlayerControls input action asset with keyboard and gam
 **Why:** We need a simple scene to test movement and combat before building real levels. A flat area with some walls to test collision.
 
 **Files:**
-- Create: `Assets/Scenes/TestArena.unity` (via Unity)
-- Create: `Assets/Sprites/` directory for placeholder sprites
+- Create: `Assets/Scenes/TestArena.unity` (via Unity/MCP)
 
 **Step 1: Create the scene**
 
 Create a new scene called `TestArena` with:
 - A Camera set to Orthographic (default for 2D)
-- A flat ground area (just a background color or sprite, no physics needed for ground in top-down)
+- A flat ground area (just a background color, no physics needed for ground in top-down)
 - 4 wall objects around the edges using BoxCollider2D (so the player can't walk off screen)
-- A simple colored square sprite as the player placeholder (can use Unity's default square sprite)
 
 **Step 2: Set up the player GameObject**
 
 Create a GameObject called "Player" with:
-- `SpriteRenderer` — use a colored square as placeholder (we'll replace with pixel art later)
+- `SpriteRenderer` — use Unity's default square sprite as placeholder
 - `Rigidbody2D` — set Body Type to Dynamic, Gravity Scale to 0 (top-down, no gravity), Freeze Rotation Z
 - `BoxCollider2D` — sized to the sprite
-- Set the sorting layer appropriately
 
 **Step 3: Verify in Unity**
 
@@ -112,96 +117,19 @@ Enter Play mode. The player square should appear. Nothing moves yet — that's e
 **Step 4: Commit**
 
 ```bash
-git add Assets/Scenes/TestArena.unity Assets/Scenes/TestArena.unity.meta Assets/Sprites/
+git add Assets/Scenes/TestArena.unity Assets/Scenes/TestArena.unity.meta
 git commit -m "feat: add test arena scene with player placeholder"
 ```
 
 ---
 
-### Task 4: Player Movement Script
+### Task 4: Player Movement + State Machine + Facing Direction
 
-**Why:** Top-down 8-directional movement using the new Input System and Rigidbody2D.
-
-**Files:**
-- Create: `Assets/Scripts/Player/PlayerController.cs`
-
-**Step 1: Write the PlayerController script**
-
-```csharp
-using UnityEngine;
-using UnityEngine.InputSystem;
-
-public class PlayerController : MonoBehaviour
-{
-    [Header("Movement")]
-    [SerializeField] private float _moveSpeed = 5f;
-
-    private Rigidbody2D _rb;
-    private PlayerControls _controls;
-    private Vector2 _moveInput;
-
-    private void Awake()
-    {
-        _rb = GetComponent<Rigidbody2D>();
-        _controls = new PlayerControls();
-    }
-
-    private void OnEnable()
-    {
-        _controls.Player.Enable();
-        _controls.Player.Move.performed += OnMove;
-        _controls.Player.Move.canceled += OnMove;
-    }
-
-    private void OnDisable()
-    {
-        _controls.Player.Move.performed -= OnMove;
-        _controls.Player.Move.canceled -= OnMove;
-        _controls.Player.Disable();
-    }
-
-    private void OnMove(InputAction.CallbackContext context)
-    {
-        _moveInput = context.ReadValue<Vector2>();
-    }
-
-    private void FixedUpdate()
-    {
-        _rb.linearVelocity = _moveInput.normalized * _moveSpeed;
-    }
-}
-```
-
-**Step 2: Attach to player**
-
-Add the `PlayerController` component to the Player GameObject in the TestArena scene.
-
-**Step 3: Playtest**
-
-Enter Play mode. Verify:
-- WASD moves the player in 8 directions
-- Arrow keys also work
-- Gamepad left stick works (if available)
-- Diagonal movement is normalized (not faster than cardinal)
-- Player stops when input is released
-- Player collides with walls and cannot pass through them
-
-**Step 4: Commit**
-
-```bash
-git add Assets/Scripts/Player/PlayerController.cs Assets/Scripts/Player/PlayerController.cs.meta
-git commit -m "feat: add top-down player movement with Input System"
-```
-
----
-
-### Task 5: Player State Machine
-
-**Why:** The player needs states (Idle, Moving, Attacking, Dashing) to enforce commitment — you can't cancel an attack or dash spam. A simple enum-based state machine keeps this clean.
+**Why:** Top-down 8-directional movement using the new Input System and Rigidbody2D. The state machine and facing direction are included from the start because they're needed by attack and dash — avoids rewriting later.
 
 **Files:**
 - Create: `Assets/Scripts/Player/PlayerState.cs`
-- Modify: `Assets/Scripts/Player/PlayerController.cs`
+- Create: `Assets/Scripts/Player/PlayerController.cs`
 
 **Step 1: Create the PlayerState enum**
 
@@ -215,9 +143,7 @@ public enum PlayerState
 }
 ```
 
-**Step 2: Integrate state into PlayerController**
-
-Update `PlayerController` to track state and only allow movement when in Idle or Moving states:
+**Step 2: Write the PlayerController script**
 
 ```csharp
 using UnityEngine;
@@ -232,8 +158,11 @@ public class PlayerController : MonoBehaviour
     private PlayerControls _controls;
     private Vector2 _moveInput;
     private PlayerState _state = PlayerState.Idle;
+    private Vector2 _facingDirection = Vector2.down;
 
     public PlayerState State => _state;
+    public Vector2 FacingDirection => _facingDirection;
+    public PlayerControls Controls => _controls;
 
     private void Awake()
     {
@@ -274,12 +203,13 @@ public class PlayerController : MonoBehaviour
 
         if (_moveInput.sqrMagnitude > 0.01f)
         {
-            _rb.linearVelocity = _moveInput.normalized * _moveSpeed;
+            _rb.velocity = _moveInput.normalized * _moveSpeed;
+            _facingDirection = _moveInput.normalized;
             _state = PlayerState.Moving;
         }
         else
         {
-            _rb.linearVelocity = Vector2.zero;
+            _rb.velocity = Vector2.zero;
             _state = PlayerState.Idle;
         }
     }
@@ -291,26 +221,35 @@ public class PlayerController : MonoBehaviour
 }
 ```
 
-**Step 3: Playtest**
+**Step 3: Attach to player**
 
-Enter Play mode. Movement should work exactly as before — state machine doesn't change behavior yet, just tracks it.
+Add the `PlayerController` component to the Player GameObject in the TestArena scene.
 
-**Step 4: Commit**
+**Step 4: Playtest**
+
+Enter Play mode. Verify:
+- WASD moves the player in 8 directions
+- Arrow keys also work
+- Gamepad left stick works (if available)
+- Diagonal movement is normalized (not faster than cardinal)
+- Player stops when input is released
+- Player collides with walls and cannot pass through them
+
+**Step 5: Commit**
 
 ```bash
-git add Assets/Scripts/Player/PlayerState.cs Assets/Scripts/Player/PlayerState.cs.meta Assets/Scripts/Player/PlayerController.cs
-git commit -m "feat: add player state machine (Idle, Moving, Attacking, Dashing)"
+git add Assets/Scripts/Player/
+git commit -m "feat: add player movement with state machine and facing direction"
 ```
 
 ---
 
-### Task 6: Melee Attack
+### Task 5: Melee Attack
 
 **Why:** The primary melee attack with commitment — once started, it must finish before the player can act again. Attack comes out quickly but locks the player.
 
 **Files:**
 - Create: `Assets/Scripts/Player/PlayerAttack.cs`
-- Modify: `Assets/Scripts/Player/PlayerController.cs` (add attack input binding)
 
 **Step 1: Write the PlayerAttack script**
 
@@ -322,53 +261,32 @@ public class PlayerAttack : MonoBehaviour
 {
     [Header("Attack Settings")]
     [SerializeField] private float _attackDuration = 0.3f;
-    [SerializeField] private float _attackRange = 0.8f;
+    [SerializeField] private float _attackOffset = 0.8f;
+    [SerializeField] private float _attackRadius = 0.4f;
     [SerializeField] private float _attackDamage = 1f;
-    [SerializeField] private Transform _attackPoint;
     [SerializeField] private LayerMask _enemyLayers;
 
     private PlayerController _controller;
-    private PlayerControls _controls;
+    private Rigidbody2D _rb;
     private float _attackTimer;
-    private Vector2 _facingDirection = Vector2.down;
 
     private void Awake()
     {
         _controller = GetComponent<PlayerController>();
-        _controls = new PlayerControls();
+        _rb = GetComponent<Rigidbody2D>();
     }
 
     private void OnEnable()
     {
-        _controls.Player.Enable();
-        _controls.Player.Attack.performed += OnAttack;
+        _controller.Controls.Player.Attack.performed += OnAttack;
     }
 
     private void OnDisable()
     {
-        _controls.Player.Attack.performed -= OnAttack;
-        _controls.Player.Disable();
+        _controller.Controls.Player.Attack.performed -= OnAttack;
     }
 
     private void Update()
-    {
-        UpdateFacingDirection();
-        UpdateAttackState();
-    }
-
-    private void UpdateFacingDirection()
-    {
-        if (_controller.State == PlayerState.Moving)
-        {
-            Vector2 move = GetComponent<Rigidbody2D>().linearVelocity;
-            if (move.sqrMagnitude > 0.01f)
-            {
-                _facingDirection = move.normalized;
-            }
-        }
-    }
-
-    private void UpdateAttackState()
     {
         if (_controller.State != PlayerState.Attacking) return;
 
@@ -390,7 +308,7 @@ public class PlayerAttack : MonoBehaviour
         _attackTimer = _attackDuration;
 
         // Stop movement during attack
-        GetComponent<Rigidbody2D>().linearVelocity = Vector2.zero;
+        _rb.velocity = Vector2.zero;
 
         // Perform the attack hit detection
         PerformAttack();
@@ -398,12 +316,12 @@ public class PlayerAttack : MonoBehaviour
 
     private void PerformAttack()
     {
-        Vector2 attackPos = (Vector2)transform.position + _facingDirection * _attackRange;
-        Collider2D[] hits = Physics2D.OverlapCircleAll(attackPos, _attackRange * 0.5f, _enemyLayers);
+        Vector2 attackPos = (Vector2)transform.position + _controller.FacingDirection * _attackOffset;
+        Collider2D[] hits = Physics2D.OverlapCircleAll(attackPos, _attackRadius, _enemyLayers);
 
         foreach (var hit in hits)
         {
-            // We'll add damage dealing when enemies exist
+            // Damage dealing added in Phase 2 when enemies exist
             Debug.Log($"Hit: {hit.name}");
         }
     }
@@ -411,16 +329,17 @@ public class PlayerAttack : MonoBehaviour
     // Visualize attack range in editor
     private void OnDrawGizmosSelected()
     {
-        Vector2 attackPos = (Vector2)transform.position + _facingDirection * _attackRange;
+        if (_controller == null) return;
+        Vector2 attackPos = (Vector2)transform.position + _controller.FacingDirection * _attackOffset;
         Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(attackPos, _attackRange * 0.5f);
+        Gizmos.DrawWireSphere(attackPos, _attackRadius);
     }
 }
 ```
 
-**Step 2: Set up attack point**
+**Step 2: Set up layers**
 
-Create an empty child GameObject on the Player called "AttackPoint" and assign it to the `_attackPoint` field. Create a Layer called "Enemy" for future use and assign it to `_enemyLayers`.
+Create a Layer called "Enemy" in Unity (Edit → Project Settings → Tags and Layers). Assign it to the `_enemyLayers` field on the PlayerAttack component.
 
 **Step 3: Playtest**
 
@@ -440,7 +359,7 @@ git commit -m "feat: add melee attack with commitment (no cancel, locks movement
 
 ---
 
-### Task 7: Dash
+### Task 6: Dash
 
 **Why:** Near-instant startup dash with cooldown. Used for dodging in combat and faster overworld traversal. Cannot dash through obstacles.
 
@@ -461,7 +380,6 @@ public class PlayerDash : MonoBehaviour
     [SerializeField] private float _dashCooldown = 0.8f;
 
     private PlayerController _controller;
-    private PlayerControls _controls;
     private Rigidbody2D _rb;
     private float _dashTimer;
     private float _cooldownTimer;
@@ -470,53 +388,41 @@ public class PlayerDash : MonoBehaviour
     private void Awake()
     {
         _controller = GetComponent<PlayerController>();
-        _controls = new PlayerControls();
         _rb = GetComponent<Rigidbody2D>();
     }
 
     private void OnEnable()
     {
-        _controls.Player.Enable();
-        _controls.Player.Dash.performed += OnDash;
+        _controller.Controls.Player.Dash.performed += OnDash;
     }
 
     private void OnDisable()
     {
-        _controls.Player.Dash.performed -= OnDash;
-        _controls.Player.Disable();
+        _controller.Controls.Player.Dash.performed -= OnDash;
     }
 
     private void Update()
     {
-        UpdateCooldown();
-        UpdateDashState();
+        if (_cooldownTimer > 0f)
+        {
+            _cooldownTimer -= Time.deltaTime;
+        }
+
+        if (_controller.State != PlayerState.Dashing) return;
+
+        _dashTimer -= Time.deltaTime;
+        if (_dashTimer <= 0f)
+        {
+            _rb.velocity = Vector2.zero;
+            _controller.SetState(PlayerState.Idle);
+        }
     }
 
     private void FixedUpdate()
     {
         if (_controller.State == PlayerState.Dashing)
         {
-            _rb.linearVelocity = _dashDirection * _dashSpeed;
-        }
-    }
-
-    private void UpdateCooldown()
-    {
-        if (_cooldownTimer > 0f)
-        {
-            _cooldownTimer -= Time.deltaTime;
-        }
-    }
-
-    private void UpdateDashState()
-    {
-        if (_controller.State != PlayerState.Dashing) return;
-
-        _dashTimer -= Time.deltaTime;
-        if (_dashTimer <= 0f)
-        {
-            _rb.linearVelocity = Vector2.zero;
-            _controller.SetState(PlayerState.Idle);
+            _rb.velocity = _dashDirection * _dashSpeed;
         }
     }
 
@@ -530,13 +436,10 @@ public class PlayerDash : MonoBehaviour
         if (_cooldownTimer > 0f) return;
 
         // Dash in movement direction, or facing direction if standing still
-        _dashDirection = _rb.linearVelocity.normalized;
+        _dashDirection = _rb.velocity.normalized;
         if (_dashDirection.sqrMagnitude < 0.01f)
         {
-            // Use the facing direction from PlayerAttack or default to down
-            var attack = GetComponent<PlayerAttack>();
-            // Fallback to down if no clear direction
-            _dashDirection = Vector2.down;
+            _dashDirection = _controller.FacingDirection;
         }
 
         _controller.SetState(PlayerState.Dashing);
@@ -546,54 +449,7 @@ public class PlayerDash : MonoBehaviour
 }
 ```
 
-**Step 2: Refactor facing direction to PlayerController**
-
-The facing direction is needed by both PlayerAttack and PlayerDash. Move it to PlayerController so both can access it:
-
-Add to `PlayerController`:
-
-```csharp
-private Vector2 _facingDirection = Vector2.down;
-public Vector2 FacingDirection => _facingDirection;
-```
-
-Update the `HandleMovement` method to track facing:
-
-```csharp
-private void HandleMovement()
-{
-    if (_state == PlayerState.Attacking || _state == PlayerState.Dashing)
-    {
-        return;
-    }
-
-    if (_moveInput.sqrMagnitude > 0.01f)
-    {
-        _rb.linearVelocity = _moveInput.normalized * _moveSpeed;
-        _facingDirection = _moveInput.normalized;
-        _state = PlayerState.Moving;
-    }
-    else
-    {
-        _rb.linearVelocity = Vector2.zero;
-        _state = PlayerState.Idle;
-    }
-}
-```
-
-Update `PlayerAttack` to use `_controller.FacingDirection` instead of its own `_facingDirection`.
-
-Update `PlayerDash.OnDash` to use `_controller.FacingDirection` as fallback:
-
-```csharp
-_dashDirection = _rb.linearVelocity.normalized;
-if (_dashDirection.sqrMagnitude < 0.01f)
-{
-    _dashDirection = _controller.FacingDirection;
-}
-```
-
-**Step 3: Playtest**
+**Step 2: Playtest**
 
 Enter Play mode. Verify:
 - Left Shift / gamepad A triggers a dash
@@ -605,16 +461,16 @@ Enter Play mode. Verify:
 - Player collides with walls during dash (cannot dash through)
 - After dash ends, player can immediately move/attack
 
-**Step 4: Commit**
+**Step 3: Commit**
 
 ```bash
-git add Assets/Scripts/Player/
-git commit -m "feat: add dash with cooldown, refactor facing direction to PlayerController"
+git add Assets/Scripts/Player/PlayerDash.cs Assets/Scripts/Player/PlayerDash.cs.meta
+git commit -m "feat: add dash with cooldown"
 ```
 
 ---
 
-### Task 8: Polish & Tuning Pass
+### Task 7: Polish & Tuning Pass
 
 **Why:** Get the numbers feeling right. This is a feel-driven task — iterate in Play mode.
 
@@ -631,7 +487,8 @@ All key values are exposed as `[SerializeField]` fields. Playtest and adjust:
 |-----------|---------------|------------|
 | Move Speed | 5 | Should feel brisk but controllable |
 | Attack Duration | 0.3s | Short enough to feel snappy, long enough to commit |
-| Attack Range | 0.8 | Visible and fair hitbox |
+| Attack Offset | 0.8 | How far in front of player the hitbox appears |
+| Attack Radius | 0.4 | Size of the hitbox — visible and fair |
 | Dash Speed | 15 | Noticeably faster than walking |
 | Dash Duration | 0.15s | Brief burst, not a teleport |
 | Dash Cooldown | 0.8s | Prevents spam, but available often enough |
@@ -654,15 +511,14 @@ git commit -m "feat: tune movement, attack, and dash values"
 
 ## Summary
 
-| Task | What It Does |
-|------|-------------|
-| 1 | Install Input System package |
-| 2 | Create Input Action Asset (keyboard + gamepad) |
-| 3 | Create test arena scene with player placeholder |
-| 4 | Player movement script (8-directional, Rigidbody2D) |
-| 5 | State machine (Idle, Moving, Attacking, Dashing) |
-| 6 | Melee attack with commitment |
-| 7 | Dash with cooldown + facing direction refactor |
-| 8 | Polish and tune all values |
+| Task | What It Does | GitHub Issue |
+|------|-------------|-------------|
+| 1 | Install Input System package | #11 |
+| 2 | Create Input Action Asset (keyboard + gamepad) | #12 |
+| 3 | Create test arena scene with player placeholder | #13 |
+| 4 | Player movement + state machine + facing direction | #14, #15 |
+| 5 | Melee attack with commitment | #16 |
+| 6 | Dash with cooldown | #17 |
+| 7 | Polish and tune all values | #18 |
 
-After Phase 1, the player can move, attack, and dash with correct feel. Ready for Phase 2: tutorial area and enemies.
+After Phase 1, the player can move, attack, and dash with correct feel. Ready for Phase 2: combat test with enemies.

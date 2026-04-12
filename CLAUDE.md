@@ -1,6 +1,6 @@
 # TurnipmanRPG
 
-Unity 2022.3.30f1 (Built-in Render Pipeline), multi-platform target.
+Unity 2022.3.30f1 (Universal Render Pipeline), multi-platform target.
 
 ## Code Conventions
 
