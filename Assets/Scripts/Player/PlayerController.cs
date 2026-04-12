@@ -7,7 +7,7 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float _moveSpeed = 5f;
 
     private Rigidbody2D _rb;
-    private PlayerControls _controls;
+    private PlayerControls _controls = new PlayerControls();
     private Vector2 _moveInput;
     private PlayerState _state = PlayerState.Idle;
     private Vector2 _facingDirection = Vector2.down;
@@ -19,7 +19,6 @@ public class PlayerController : MonoBehaviour
     private void Awake()
     {
         _rb = GetComponent<Rigidbody2D>();
-        _controls = new PlayerControls();
     }
 
     private void OnEnable()
