@@ -70,4 +70,9 @@ public class PlayerController : MonoBehaviour
     {
         _state = newState;
     }
+
+    private void OnDestroy()
+    {
+        _controls?.Dispose();
+    }
 }

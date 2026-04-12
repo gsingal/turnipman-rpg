@@ -36,23 +36,21 @@ public class PlayerDash : MonoBehaviour
         {
             _cooldownTimer -= Time.deltaTime;
         }
-
-        if (_controller.State != PlayerState.Dashing) return;
-
-        _dashTimer -= Time.deltaTime;
-        if (_dashTimer <= 0f)
-        {
-            _rb.velocity = Vector2.zero;
-            _controller.SetState(PlayerState.Idle);
-        }
     }
 
     private void FixedUpdate()
     {
-        if (_controller.State == PlayerState.Dashing)
+        if (_controller.State != PlayerState.Dashing) return;
+
+        _dashTimer -= Time.fixedDeltaTime;
+        if (_dashTimer <= 0f)
         {
-            _rb.velocity = _dashDirection * _dashSpeed;
+            _rb.velocity = Vector2.zero;
+            _controller.SetState(PlayerState.Idle);
+            return;
         }
+
+        _rb.velocity = _dashDirection * _dashSpeed;
     }
 
     private void OnDash(InputAction.CallbackContext context)
