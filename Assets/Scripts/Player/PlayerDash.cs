@@ -46,12 +46,12 @@ public class PlayerDash : MonoBehaviour
         _dashTimer -= Time.fixedDeltaTime;
         if (_dashTimer <= 0f)
         {
-            _rb.velocity = Vector2.zero;
+            _rb.linearVelocity = Vector2.zero;
             _controller.SetState(PlayerState.Idle);
             return;
         }
 
-        _rb.velocity = _dashDirection * _dashSpeed;
+        _rb.linearVelocity = _dashDirection * _dashSpeed;
     }
 
     private void OnDash(InputAction.CallbackContext context)
@@ -64,7 +64,7 @@ public class PlayerDash : MonoBehaviour
         if (_cooldownTimer > 0f) return;
 
         // Dash in movement direction, or facing direction if standing still
-        _dashDirection = _rb.velocity.normalized;
+        _dashDirection = _rb.linearVelocity.normalized;
         if (_dashDirection.sqrMagnitude < 0.01f)
         {
             _dashDirection = _controller.FacingDirection;

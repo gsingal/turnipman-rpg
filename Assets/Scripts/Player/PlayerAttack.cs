@@ -53,7 +53,7 @@ public class PlayerAttack : MonoBehaviour
         _attackTimer = _attackDuration;
 
         // Stop movement during attack
-        _rb.velocity = Vector2.zero;
+        _rb.linearVelocity = Vector2.zero;
 
         // Perform the attack hit detection
         PerformAttack();

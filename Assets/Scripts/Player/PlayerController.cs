@@ -56,13 +56,13 @@ public class PlayerController : MonoBehaviour
 
         if (_moveInput.sqrMagnitude > 0.01f)
         {
-            _rb.velocity = _moveInput.normalized * _moveSpeed;
+            _rb.linearVelocity = _moveInput.normalized * _moveSpeed;
             _facingDirection = _moveInput.normalized;
             _state = PlayerState.Moving;
         }
         else
         {
-            _rb.velocity = Vector2.zero;
+            _rb.linearVelocity = Vector2.zero;
             _state = PlayerState.Idle;
         }
     }
