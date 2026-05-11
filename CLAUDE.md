@@ -1,6 +1,9 @@
 # TurnipmanRPG
 
-Unity 2022.3.30f1 (Universal Render Pipeline), multi-platform target.
+Unity 6 (6000.4.6f1) with Universal Render Pipeline (URP), multi-platform target.
+
+- Uses `Rigidbody2D.linearVelocity` (NOT `.velocity` which was Unity 2022)
+- Uses New Input System only (`activeInputHandler: 1`), old Input Manager is deprecated
 
 ## Code Conventions
 

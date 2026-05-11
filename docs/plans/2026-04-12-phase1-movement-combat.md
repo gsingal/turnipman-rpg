@@ -8,7 +8,7 @@
 
 **Tech Stack:** Unity 2022.3.30f1, C#, New Input System package, Rigidbody2D, Physics2D
 
-**Note:** Unity 2022.3 uses `Rigidbody2D.velocity` (NOT `.linearVelocity` which is Unity 6+).
+**Note:** Unity 6 uses `Rigidbody2D.linearVelocity` (NOT `.velocity` which was Unity 2022).
 
 ---
 
